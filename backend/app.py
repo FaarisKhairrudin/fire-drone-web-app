@@ -4,12 +4,11 @@ import timm
 from PIL import Image
 from torchvision import transforms
 from huggingface_hub import hf_hub_download
+import spaces
 
 # ==========================================
 # 1. DOWNLOAD & LOAD MODEL DARI REPO KAMU
 # ==========================================
-# PENTING: Ganti 'nama_file_modelmu.pth' sesuai dengan nama file asli
-# yang kamu upload di repo Faaris21/fire-drone-detection-base (misal: best.pt, model.pth, dsb.)
 NAMA_FILE_MODEL = "best_model_convnextv2_base copy.pth"
 
 model_path = hf_hub_download(
@@ -17,13 +16,14 @@ model_path = hf_hub_download(
     filename=NAMA_FILE_MODEL
 )
 
-device = torch.device("cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Inisialisasi arsitektur convnextv2_base dari timm dengan 2 kelas output
-model = timm.create_model('convnextv2_base', pretrained=False, num_classes=2)
+# Inisialisasi arsitektur convnextv2_base dari timm dengan 1 kelas output (binary classification)
+model = timm.create_model('convnextv2_base', pretrained=False, num_classes=1)
 
 # Load bobot hasil training kamu
 model.load_state_dict(torch.load(model_path, map_location=device))
+model.to(device)
 model.eval()
 
 # ==========================================
@@ -38,6 +38,7 @@ transform = transforms.Compose([
 # ==========================================
 # 3. FUNGSI PREDIKSI (YANG AKAN JADI API)
 # ==========================================
+@spaces.GPU
 def prediksi(img):
     if img is None:
         return {"Error": 0.0}
@@ -48,13 +49,12 @@ def prediksi(img):
 
     with torch.no_grad():
         output = model(tensor)
-        probs = torch.softmax(output, dim=1)[0]
+        prob_fire = float(torch.sigmoid(output)[0][0])
+        prob_nofire = 1.0 - prob_fire
 
-    # Format return dictionary ini yang akan dikirim sebagai JSON saat API dipanggil
-    # Catatan: Sesuaikan urutan [1] dan [0] dengan index kelas saat kamu training
     return {
-        "🔥 Terdeteksi Asap / Api": float(probs[1]),
-        "🌲 Aman / Tidak Ada Api": float(probs[0])
+        "🔥 Terdeteksi Asap / Api": prob_fire,
+        "🌲 Aman / Tidak Ada Api": prob_nofire
     }
 
 # ==========================================
@@ -71,3 +71,4 @@ demo = gr.Interface(
 
 if __name__ == "__main__":
     demo.launch()
+
