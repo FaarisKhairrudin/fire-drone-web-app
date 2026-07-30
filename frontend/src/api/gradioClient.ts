@@ -1,8 +1,9 @@
 import { client } from "@gradio/client";
 
-// Repository ID & URL HuggingFace Space Backend
+// URL & Endpoint Backend
 export const HF_SPACE_ID = "Faaris21/fire-drone-space";
 export const HF_SPACE_URL = "https://faaris21-fire-drone-space.hf.space";
+export const LOCAL_BACKEND_URL = import.meta.env.VITE_LOCAL_BACKEND_URL || "http://127.0.0.1:7860";
 export const HF_TOKEN = import.meta.env.VITE_HF_TOKEN || "";
 
 export interface PredictionResult {
@@ -10,13 +11,11 @@ export interface PredictionResult {
   noFireProbability: number;
   latencySeconds: number;
   rawJsonString?: string;
+  source?: "local" | "cloud";
 }
 
 let clientInstance: any = null;
 
-/**
- * Mendapatkan atau inisialisasi koneksi Gradio Client dengan Token HF (jika ada)
- */
 export async function getGradioClient() {
   if (!clientInstance) {
     try {
@@ -32,38 +31,61 @@ export async function getGradioClient() {
 }
 
 /**
- * Direct REST API Fallback untuk Gradio 5 dengan dukungan Hugging Face Bearer Auth
+ * Cek status aktif backend (Mendahulukan Backend Lokal di Laptop)
  */
-async function predictViaRest(imageFile: Blob | File): Promise<any> {
+export async function checkBackendStatus(): Promise<{ isConnected: boolean; isLocal: boolean }> {
+  try {
+    const localRes = await fetch(`${LOCAL_BACKEND_URL}/config`, { signal: AbortSignal.timeout(1000) });
+    if (localRes.ok) {
+      return { isConnected: true, isLocal: true };
+    }
+  } catch (err) {
+    // Local server offline
+  }
+
+  try {
+    const cloudRes = await fetch(`${HF_SPACE_URL}/config`, { signal: AbortSignal.timeout(3000) });
+    if (cloudRes.ok) {
+      return { isConnected: true, isLocal: false };
+    }
+  } catch (err) {
+    // Cloud server offline
+  }
+
+  return { isConnected: false, isLocal: false };
+}
+
+/**
+ * Direct REST API call ke URL backend spesifik (lokal atau cloud)
+ */
+async function predictViaRestUrl(baseUrl: string, imageFile: Blob | File): Promise<any> {
   const commonHeaders: Record<string, string> = {};
-  if (HF_TOKEN) {
+  if (baseUrl.includes("hf.space") && HF_TOKEN) {
     commonHeaders["Authorization"] = `Bearer ${HF_TOKEN}`;
   }
 
-  // 1. Upload File ke endpoint /gradio_api/upload
   const formData = new FormData();
   formData.append("files", imageFile, "drone_image.jpg");
 
-  const uploadRes = await fetch(`${HF_SPACE_URL}/gradio_api/upload`, {
+  const uploadRes = await fetch(`${baseUrl}/gradio_api/upload`, {
     method: "POST",
     headers: commonHeaders,
     body: formData,
   });
 
   if (!uploadRes.ok) {
-    throw new Error(`Gagal mengunggah citra: HTTP ${uploadRes.status}`);
+    throw new Error(`Gagal mengunggah citra ke ${baseUrl}: HTTP ${uploadRes.status}`);
   }
 
   const uploadData = await uploadRes.json();
   const uploadedPath = Array.isArray(uploadData) ? uploadData[0] : uploadData;
 
-  // 2. Panggil endpoint /gradio_api/call/prediksi
   const callHeaders: Record<string, string> = {
     ...commonHeaders,
     "Content-Type": "application/json",
   };
 
-  const callRes = await fetch(`${HF_SPACE_URL}/gradio_api/call/prediksi`, {
+  const callRes = await fetch(`${baseUrl}/gradio_api/call/prediksi`, {
     method: "POST",
     headers: callHeaders,
     body: JSON.stringify({
@@ -77,8 +99,7 @@ async function predictViaRest(imageFile: Blob | File): Promise<any> {
 
   const { event_id } = await callRes.json();
 
-  // 3. Ambil hasil dari stream SSE
-  const streamRes = await fetch(`${HF_SPACE_URL}/gradio_api/call/prediksi/${event_id}`, {
+  const streamRes = await fetch(`${baseUrl}/gradio_api/call/prediksi/${event_id}`, {
     headers: commonHeaders,
   });
 
@@ -95,40 +116,53 @@ async function predictViaRest(imageFile: Blob | File): Promise<any> {
 }
 
 /**
- * Memanggil fungsi prediksi pada Gradio backend
- * @param imageFile Blob/File gambar yang di-upload
+ * Memanggil fungsi prediksi dengan Smart Auto-Detection (Lokal Laptop vs Cloud)
  */
 export async function predictFire(imageFile: Blob | File): Promise<PredictionResult> {
   const startTime = performance.now();
   let rawData: any = null;
+  let source: "local" | "cloud" = "cloud";
 
-  // 1. Coba via @gradio/client
+  // 1. Prioritas Utama: Coba hubungi Backend LOKAL di laptop lebih dulu
   try {
-    const c = await getGradioClient();
-    if (c && typeof c.predict === "function") {
-      const res = await c.predict("/prediksi", [imageFile]);
-      rawData = res?.data ? res.data[0] : res;
-    }
-  } catch (err) {
-    console.warn("Gradio client predict error, switching to direct REST API:", err);
+    rawData = await predictViaRestUrl(LOCAL_BACKEND_URL, imageFile);
+    source = "local";
+  } catch (localErr) {
+    console.log("Backend lokal tidak aktif / error, beralih ke HuggingFace Cloud...", localErr);
   }
 
-  // 2. Jika client gagal atau error, gunakan Direct REST API Fallback
+  // 2. Jika backend lokal tidak aktif, coba via @gradio/client Cloud
   if (!rawData) {
-    rawData = await predictViaRest(imageFile);
+    try {
+      const c = await getGradioClient();
+      if (c && typeof c.predict === "function") {
+        const res = await c.predict("/prediksi", [imageFile]);
+        rawData = res?.data ? res.data[0] : res;
+        source = "cloud";
+      }
+    } catch (err) {
+      console.warn("Gradio client predict error, switching to direct REST API Cloud:", err);
+    }
+  }
+
+  // 3. Jika client gagal, gunakan Direct REST API Fallback Cloud
+  if (!rawData) {
+    rawData = await predictViaRestUrl(HF_SPACE_URL, imageFile);
+    source = "cloud";
   }
 
   const endTime = performance.now();
   const latencySeconds = parseFloat(((endTime - startTime) / 1000).toFixed(2));
 
-  return parsePredictionData(rawData, latencySeconds);
+  const result = parsePredictionData(rawData, latencySeconds);
+  result.source = source;
+  return result;
 }
 
 function parsePredictionData(data: any, latencySeconds: number): PredictionResult {
   console.log("[Backend Response Raw Data]:", data);
   const jsonStrForDebug = JSON.stringify(data || {});
 
-  // Jika backend mengembalikan pesan error resmi dari Hugging Face (misal kuota)
   if (data && data.error) {
     throw new Error(`Backend Error: ${data.error}`);
   }
@@ -136,13 +170,11 @@ function parsePredictionData(data: any, latencySeconds: number): PredictionResul
   let fireProb = 0.0;
   let noFireProb = 0.0;
 
-  // Pencarian rekursif untuk menemukan angka probabilitas
   function searchObject(obj: any) {
     if (!obj) return;
 
     if (typeof obj === "object") {
       for (const [key, val] of Object.entries(obj)) {
-        // Jika format respons adalah object dictionary key -> number
         if (typeof key === "string" && typeof val === "number") {
           if (key.includes("Terdeteksi") || (key.includes("Api") && !key.includes("Tidak Ada"))) {
             fireProb = val;
@@ -151,7 +183,6 @@ function parsePredictionData(data: any, latencySeconds: number): PredictionResul
           }
         }
 
-        // Jika format respons adalah Array of Objects { label: "...", confidence: ... }
         if (key === "label" && typeof val === "string") {
           const conf = obj.confidence !== undefined ? Number(obj.confidence) : Number(obj.score || 0);
           if (val.includes("Terdeteksi") || (val.includes("Api") && !val.includes("Tidak Ada"))) {
@@ -161,7 +192,6 @@ function parsePredictionData(data: any, latencySeconds: number): PredictionResul
           }
         }
 
-        // Cari lebih dalam ke dalam array/nested object
         if (typeof val === "object" && val !== null) {
           searchObject(val);
         }
@@ -171,7 +201,6 @@ function parsePredictionData(data: any, latencySeconds: number): PredictionResul
 
   searchObject(data);
 
-  // Fallback matematis: Jika hanya satu probabilitas yang terisi
   if (fireProb > 0 && noFireProb === 0) {
     noFireProb = parseFloat((1.0 - fireProb).toFixed(4));
   } else if (noFireProb > 0 && fireProb === 0) {

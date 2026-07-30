@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
 import { ResultCard } from './components/ResultCard';
-import { predictFire, HF_SPACE_URL, PredictionResult } from './api/gradioClient';
+import { predictFire, checkBackendStatus, PredictionResult } from './api/gradioClient';
 
 export const App: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | Blob | null>(null);
@@ -11,16 +11,14 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isLocalBackend, setIsLocalBackend] = useState<boolean>(false);
 
-  // Cek status aktif backend Space secara langsung
+  // Cek status aktif backend (Mendahulukan Backend Lokal Laptop)
   useEffect(() => {
-    fetch(`${HF_SPACE_URL}/config`)
-      .then((res) => {
-        setIsConnected(res.ok);
-      })
-      .catch(() => {
-        setIsConnected(false);
-      });
+    checkBackendStatus().then(({ isConnected, isLocal }) => {
+      setIsConnected(isConnected);
+      setIsLocalBackend(isLocal);
+    });
   }, []);
 
   const handleImageSelected = async (file: File) => {
@@ -35,9 +33,10 @@ export const App: React.FC = () => {
       const res = await predictFire(file);
       setResult(res);
       setIsConnected(true);
+      setIsLocalBackend(res.source === 'local');
     } catch (err: any) {
       console.error("Gagal melakukan prediksi:", err);
-      setError(err?.message || "Gagal menghubungi server prediksi Hugging Face.");
+      setError(err?.message || "Gagal menghubungi server prediksi.");
     } finally {
       setIsLoading(false);
     }
@@ -45,7 +44,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-container">
-      <Header isConnected={isConnected} />
+      <Header isConnected={isConnected} isLocal={isLocalBackend} />
 
       <main className="adaptive-grid">
         <ImageUploader

@@ -1,27 +1,48 @@
+import os
 import gradio as gr
 import torch
 import timm
 from PIL import Image
 from torchvision import transforms
 from huggingface_hub import hf_hub_download
-import spaces
+
+# Penanganan kondisional modul spaces (khusus HuggingFace ZeroGPU)
+try:
+    import spaces
+    HAS_SPACES = True
+except ImportError:
+    HAS_SPACES = False
 
 # ==========================================
-# 1. DOWNLOAD & LOAD MODEL DARI REPO KAMU
+# 1. LOGIKA PEMANGGILAN MODEL 3 TINGKAT
 # ==========================================
 NAMA_FILE_MODEL = "best_model_convnextv2_base copy.pth"
 
-model_path = hf_hub_download(
-    repo_id="Faaris21/fire-drone-detection-base",
-    filename=NAMA_FILE_MODEL
-)
+# Path 1: Folder outputs/models/ proyek laptop lokal
+LOCAL_PATH_1 = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../outputs/models", NAMA_FILE_MODEL))
+# Path 2: Folder demo-app/models/
+LOCAL_PATH_2 = os.path.abspath(os.path.join(os.path.dirname(__file__), "models", NAMA_FILE_MODEL))
+
+if os.path.exists(LOCAL_PATH_1):
+    print(f" [OK] Menggunakan model lokal dari: {LOCAL_PATH_1}")
+    model_path = LOCAL_PATH_1
+elif os.path.exists(LOCAL_PATH_2):
+    print(f" [OK] Menggunakan model lokal dari: {LOCAL_PATH_2}")
+    model_path = LOCAL_PATH_2
+else:
+    print(" [INFO] Model lokal tidak ditemukan. Men-download dari Hugging Face Hub...")
+    model_path = hf_hub_download(
+        repo_id="Faaris21/fire-drone-detection-base",
+        filename=NAMA_FILE_MODEL
+    )
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f" Device yang digunakan: {device}")
 
 # Inisialisasi arsitektur convnextv2_base dari timm dengan 1 kelas output (binary classification)
 model = timm.create_model('convnextv2_base', pretrained=False, num_classes=1)
 
-# Load bobot hasil training kamu
+# Load bobot hasil training
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
 model.eval()
@@ -36,10 +57,9 @@ transform = transforms.Compose([
 ])
 
 # ==========================================
-# 3. FUNGSI PREDIKSI (YANG AKAN JADI API)
+# 3. FUNGSI PREDIKSI
 # ==========================================
-@spaces.GPU
-def prediksi(img):
+def prediksi_core(img):
     if img is None:
         return {"Error": 0.0}
 
@@ -57,10 +77,15 @@ def prediksi(img):
         "🌲 Aman / Tidak Ada Api": prob_nofire
     }
 
+# Gunakan dekorator spaces.GPU jika berjalan di HuggingFace Space
+if HAS_SPACES:
+    prediksi = spaces.GPU(prediksi_core)
+else:
+    prediksi = prediksi_core
+
 # ==========================================
 # 4. BANGUN INTERFACE GRADIO
 # ==========================================
-# Gradio otomatis akan membuatkan REST API endpoint "/predict" dari fungsi di atas
 demo = gr.Interface(
     fn=prediksi,
     inputs=gr.Image(type="pil", label="Upload Foto / Citra Drone"),
@@ -70,5 +95,5 @@ demo = gr.Interface(
 )
 
 if __name__ == "__main__":
-    demo.launch()
-
+    # Jalankan server lokal di port 7860
+    demo.launch(server_name="127.0.0.1", server_port=7860)
