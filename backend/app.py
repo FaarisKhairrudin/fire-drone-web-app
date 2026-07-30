@@ -16,7 +16,7 @@ except ImportError:
 # ==========================================
 # 1. LOGIKA PEMANGGILAN MODEL 3 TINGKAT
 # ==========================================
-NAMA_FILE_MODEL = "best_model_convnextv2_base copy.pth"
+NAMA_FILE_MODEL = "best_model_convnextv2_base_TL_forestyt.pth"
 
 # Path 1: Folder outputs/models/ proyek laptop lokal
 LOCAL_PATH_1 = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../outputs/models", NAMA_FILE_MODEL))
