@@ -9,7 +9,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ isConnected, isLocal }) => {
   let statusText = 'Checking API Status...';
   if (isConnected) {
-    statusText = isLocal ? 'Backend API Connected (Lokal Laptop)' : 'Backend API Connected (Cloud)';
+    statusText = isLocal ? 'Backend API Connected (Lokal)' : 'Backend API Connected (Cloud)';
   } else {
     statusText = 'Backend Offline';
   }

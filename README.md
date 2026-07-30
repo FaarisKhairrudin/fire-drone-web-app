@@ -19,11 +19,16 @@ Gunakan mode ini jika tidak ingin menjalankan backend Python di laptop.
    npm install
    ```
 
-2. Buat file `.env` (opsional):
-   ```bash
-   cp .env.example .env
-   ```
-   Isi `VITE_HF_TOKEN` dengan token Hugging Face Anda jika ada.
+2. Buka folder `frontend` dan buat file `.env`:
+   - Copy file `.env.example` menjadi `.env`
+   - Buka file `.env` yang baru dibuat.
+   - Isi `VITE_HF_TOKEN` dengan token Hugging Face Anda jika ingin menggunakan Cloud Mode tanpa limit (opsional). 
+     > **Cara mendapatkan token Hugging Face:** 
+     > 1. Buat akun / login di [huggingface.co](https://huggingface.co/)
+     > 2. Buka **Settings** -> **Access Tokens**
+     > 3. Klik **Create new token**
+     > 4. Pada pilihan **Token Type**, pilih **Read** (ini sudah cukup untuk menjalankan model).
+     > 5. Beri nama token, klik create, dan copy token tersebut.
 
 3. Jalankan aplikasi frontend:
    ```bash
