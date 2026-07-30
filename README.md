@@ -10,6 +10,12 @@ Aplikasi web klasifikasi deteksi kebakaran hutan menggunakan model ConvNeXt-V2 (
 
 ## Panduan Menjalankan Aplikasi
 
+Langkah pertama, clone repository ini terlebih dahulu:
+```bash
+git clone https://github.com/FaarisKhairrudin/fire-drone-web-app.git
+cd fire-drone-web-app
+```
+
 ### Mode 1: Cloud Mode (Backend Hugging Face Space + Frontend)
 Gunakan mode ini jika tidak ingin menjalankan backend Python di laptop.
 
