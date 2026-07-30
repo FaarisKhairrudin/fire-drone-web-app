@@ -20,13 +20,8 @@ NAMA_FILE_MODEL = "best_model_convnextv2_base_TL_forestyt.pth"
 
 # Path 1: Folder outputs/models/ proyek laptop lokal
 LOCAL_PATH_1 = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../outputs/models", NAMA_FILE_MODEL))
-
-# Path 2: Folder backend/models/ jika didownload manual
+# Path 2: Folder demo-app/models/
 LOCAL_PATH_2 = os.path.abspath(os.path.join(os.path.dirname(__file__), "models", NAMA_FILE_MODEL))
-
-# Path 3: Folder yang sama dengan app.py (untuk deploy di Hugging Face Space)
-LOCAL_PATH_3 = os.path.abspath(os.path.join(os.path.dirname(__file__), NAMA_FILE_MODEL))
-
 
 if os.path.exists(LOCAL_PATH_1):
     print(f" [OK] Menggunakan model lokal dari: {LOCAL_PATH_1}")
@@ -34,9 +29,6 @@ if os.path.exists(LOCAL_PATH_1):
 elif os.path.exists(LOCAL_PATH_2):
     print(f" [OK] Menggunakan model lokal dari: {LOCAL_PATH_2}")
     model_path = LOCAL_PATH_2
-elif os.path.exists(LOCAL_PATH_3):
-    print(f" [OK] Menggunakan model lokal dari: {LOCAL_PATH_3}")
-    model_path = LOCAL_PATH_3
 else:
     print(" [INFO] Model lokal tidak ditemukan. Men-download dari Hugging Face Hub...")
     model_path = hf_hub_download(
@@ -104,5 +96,5 @@ demo = gr.Interface(
 )
 
 if __name__ == "__main__":
-    # Jalankan server lokal di port 7860
-    demo.launch(server_name="127.0.0.1", server_port=7860)
+    # Jalankan server di 0.0.0.0 agar bisa diakses oleh Cloud / Hugging Face
+    demo.launch(server_name="0.0.0.0", server_port=7860)
