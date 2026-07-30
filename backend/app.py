@@ -91,7 +91,8 @@ demo = gr.Interface(
     inputs=gr.Image(type="pil", label="Upload Foto / Citra Drone"),
     outputs=gr.Label(num_top_classes=2, label="Hasil Prediksi"),
     title="Backend API - Deteksi Kebakaran Hutan",
-    description="Space ini berfungsi sebagai backend model ConvNeXt-V2 untuk dihubungkan ke website custom."
+    description="Space ini berfungsi sebagai backend model ConvNeXt-V2 untuk dihubungkan ke website custom.",
+    api_name="prediksi"
 )
 
 if __name__ == "__main__":
