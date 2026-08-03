@@ -11,9 +11,10 @@ export interface PredictionResult {
 interface ResultCardProps {
   result: PredictionResult | null;
   isLoading: boolean;
+  error?: string | null;
 }
 
-export const ResultCard: React.FC<ResultCardProps> = ({ result, isLoading }) => {
+export const ResultCard: React.FC<ResultCardProps> = ({ result, isLoading, error }) => {
   if (isLoading) {
     return (
       <div className="card">
@@ -26,6 +27,26 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, isLoading }) => 
           <div className="badge-text-wrapper">
             <h3 className="badge-text-title">Menganalisis Citra...</h3>
             <p className="badge-text-desc">AI sedang memproses gambar melalui model ConvNeXt-V2.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card">
+        <div className="card-header">
+          <BarChart3 size={20} />
+          Hasil Analisis AI
+        </div>
+        <div className="result-badge warning">
+          <AlertOctagon size={28} />
+          <div className="badge-text-wrapper">
+            <h3 className="badge-text-title">Gambar Tidak Sesuai</h3>
+            <p className="badge-text-desc">
+              {error}
+            </p>
           </div>
         </div>
       </div>

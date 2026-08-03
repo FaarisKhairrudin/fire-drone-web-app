@@ -56,6 +56,7 @@ export const App: React.FC = () => {
         <ResultCard
           result={result}
           isLoading={isLoading}
+          error={error}
         />
       </main>
     </div>

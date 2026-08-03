@@ -280,6 +280,12 @@ body {
   color: var(--color-safe-text);
 }
 
+.result-badge.warning {
+  background: #fff8eb;
+  border: 1px solid #f5c46b;
+  color: #9a3412;
+}
+
 .result-badge.empty {
   background: var(--bg-app);
   border: 1px solid var(--border-color);

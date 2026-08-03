@@ -3,7 +3,6 @@ import { client } from "@gradio/client";
 // URL & Endpoint Backend
 export const HF_SPACE_ID = "Faaris21/fire-drone-space";
 export const HF_SPACE_URL = "https://faaris21-fire-drone-space.hf.space";
-export const LOCAL_BACKEND_URL = import.meta.env.VITE_LOCAL_BACKEND_URL || "http://127.0.0.1:7860";
 export const HF_TOKEN = import.meta.env.VITE_HF_TOKEN || "";
 
 export interface PredictionResult {
@@ -31,25 +30,16 @@ export async function getGradioClient() {
 }
 
 /**
- * Cek status aktif backend (Mendahulukan Backend Lokal di Laptop)
+ * Cek status backend Hugging Face Space.
  */
 export async function checkBackendStatus(): Promise<{ isConnected: boolean; isLocal: boolean }> {
-  try {
-    const localRes = await fetch(`${LOCAL_BACKEND_URL}/config`, { signal: AbortSignal.timeout(1000) });
-    if (localRes.ok) {
-      return { isConnected: true, isLocal: true };
-    }
-  } catch (err) {
-    // Local server offline
-  }
-
   try {
     const cloudRes = await fetch(`${HF_SPACE_URL}/config`, { signal: AbortSignal.timeout(3000) });
     if (cloudRes.ok) {
       return { isConnected: true, isLocal: false };
     }
   } catch (err) {
-    // Cloud server offline
+    // Cloud backend offline
   }
 
   return { isConnected: false, isLocal: false };
@@ -116,36 +106,24 @@ async function predictViaRestUrl(baseUrl: string, imageFile: Blob | File): Promi
 }
 
 /**
- * Memanggil fungsi prediksi dengan Smart Auto-Detection (Lokal Laptop vs Cloud)
+ * Memanggil fungsi prediksi melalui Hugging Face Space backend.
  */
 export async function predictFire(imageFile: Blob | File): Promise<PredictionResult> {
   const startTime = performance.now();
   let rawData: any = null;
   let source: "local" | "cloud" = "cloud";
 
-  // 1. Prioritas Utama: Coba hubungi Backend LOKAL di laptop lebih dulu
   try {
-    rawData = await predictViaRestUrl(LOCAL_BACKEND_URL, imageFile);
-    source = "local";
-  } catch (localErr) {
-    console.log("Backend lokal tidak aktif / error, beralih ke HuggingFace Cloud...", localErr);
-  }
-
-  // 2. Jika backend lokal tidak aktif, coba via @gradio/client Cloud
-  if (!rawData) {
-    try {
-      const c = await getGradioClient();
-      if (c && typeof c.predict === "function") {
-        const res = await c.predict("/prediksi", [imageFile]);
-        rawData = res?.data ? res.data[0] : res;
-        source = "cloud";
-      }
-    } catch (err) {
-      console.warn("Gradio client predict error, switching to direct REST API Cloud:", err);
+    const c = await getGradioClient();
+    if (c && typeof c.predict === "function") {
+      const res = await c.predict("/prediksi", [imageFile]);
+      rawData = res?.data ? res.data[0] : res;
+      source = "cloud";
     }
+  } catch (err) {
+    console.warn("Gradio client predict error, switching to direct REST API Cloud:", err);
   }
 
-  // 3. Jika client gagal, gunakan Direct REST API Fallback Cloud
   if (!rawData) {
     rawData = await predictViaRestUrl(HF_SPACE_URL, imageFile);
     source = "cloud";
@@ -164,7 +142,10 @@ function parsePredictionData(data: any, latencySeconds: number): PredictionResul
   const jsonStrForDebug = JSON.stringify(data || {});
 
   if (data && data.error) {
-    throw new Error(`Backend Error: ${data.error}`);
+    const backendMessage = typeof data.error === "string"
+      ? data.error
+      : data.error?.message || data.error?.detail || "Terjadi kesalahan pada backend.";
+    throw new Error(backendMessage);
   }
 
   let fireProb = 0.0;
